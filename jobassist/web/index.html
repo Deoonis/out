@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Job Assist</title>
+<style>
+:root{--bg:#f4f6fb;--card:#fff;--ink:#0f172a;--mute:#64748b;--line:#e2e8f0;--acc:#4f46e5;--acc2:#7c3aed;--ok:#059669;--warn:#d97706;--bad:#e11d48;--r:14px}
+*{box-sizing:border-box}body{margin:0;font:14px/1.45 "Segoe UI",system-ui,sans-serif;background:var(--bg);color:var(--ink);display:flex;height:100vh;overflow:hidden}
+aside{width:230px;background:#0f172a;color:#cbd5e1;display:flex;flex-direction:column;padding:16px 10px;flex-shrink:0}
+aside h1{font-size:17px;color:#fff;margin:4px 10px 18px}aside h1 span{color:#a5b4fc}
+aside button.nav{all:unset;display:block;padding:9px 12px;border-radius:10px;cursor:pointer;margin:1px 0}
+aside button.nav:hover{background:#1e293b}aside button.nav.on{background:linear-gradient(90deg,var(--acc),var(--acc2));color:#fff}
+aside .foot{margin-top:auto;font-size:12px;color:#64748b;padding:8px 10px}
+main{flex:1;overflow:auto;padding:22px 28px}
+h2{margin:0 0 16px;font-size:22px}h3{margin:0 0 10px;font-size:15px}
+.grid{display:grid;gap:14px}.g2{grid-template-columns:repeat(auto-fit,minmax(340px,1fr))}.g5{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:16px;box-shadow:0 1px 3px #0f172a0d}
+.stat b{display:block;font-size:28px}.stat span{color:var(--mute);font-size:12px}
+input,select,textarea{font:inherit;border:1px solid var(--line);border-radius:10px;padding:7px 10px;background:#fff;color:var(--ink);width:100%}
+textarea{min-height:80px;resize:vertical}label{display:block;font-size:12px;color:var(--mute);margin:8px 0 3px}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.row>*{flex:1}.row>.auto{flex:0 0 auto}
+button.b{border:0;border-radius:10px;padding:8px 14px;cursor:pointer;background:var(--acc);color:#fff;font:inherit;white-space:nowrap}
+button.b:hover{filter:brightness(1.1)}button.b.g{background:#e2e8f0;color:var(--ink)}button.b.r{background:var(--bad)}button.b.s{padding:4px 9px;font-size:12px}
+.pill{display:inline-block;padding:2px 8px;border-radius:99px;font-size:12px;background:#eef2ff;color:var(--acc)}
+.score{display:inline-block;min-width:38px;text-align:center;font-weight:700;border-radius:8px;padding:3px 6px;color:#fff}
+.vac{display:flex;gap:12px;align-items:flex-start;padding:12px 0;border-bottom:1px solid var(--line)}.vac:last-child{border:0}
+.vac .t{font-weight:600}.mute{color:var(--mute);font-size:12px}
+.kanban{display:grid;grid-template-columns:repeat(7,minmax(200px,1fr));gap:10px;align-items:start;overflow-x:auto;padding-bottom:8px}
+.col{background:#e9edf5;border-radius:var(--r);padding:10px;min-height:300px}.col.over{outline:2px dashed var(--acc)}
+.col h4{margin:2px 4px 10px;font-size:13px;display:flex;justify-content:space-between}
+.kc{background:#fff;border-radius:10px;padding:10px;margin-bottom:8px;cursor:grab;border:1px solid var(--line)}
+.kc:hover{box-shadow:0 4px 12px #0f172a1a}
+.modal{position:fixed;inset:0;background:#0f172a80;display:flex;align-items:center;justify-content:center;z-index:9}
+.modal .card{width:min(900px,94vw);max-height:90vh;overflow:auto}
+.ai-out{white-space:pre-wrap;background:#f8fafc;border:1px solid var(--line);border-radius:10px;padding:12px;margin-top:10px;max-height:420px;overflow:auto}
+.empty{text-align:center;color:var(--mute);padding:30px}
+.chk{display:flex;gap:8px;align-items:center;padding:4px 0}.chk input{width:auto}
+.bar{height:10px;background:#e2e8f0;border-radius:99px;overflow:hidden}.bar i{display:block;height:100%;background:linear-gradient(90deg,var(--acc),var(--acc2))}
+.toast{position:fixed;right:20px;bottom:20px;background:#0f172a;color:#fff;padding:10px 16px;border-radius:10px;z-index:10}
+table{width:100%;border-collapse:collapse}td,th{padding:6px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+.stack{display:flex;height:12px;background:#e2e8f0;border-radius:99px;overflow:hidden;margin:3px 0 8px}.stack i{display:block;height:100%}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px}
+.chat{max-height:340px;overflow:auto;margin:10px 0;display:flex;flex-direction:column;gap:8px}.msg{white-space:pre-wrap;padding:9px 12px;border-radius:12px;max-width:90%}.msg.user{align-self:flex-end;background:#eef2ff}.msg.assistant{align-self:flex-start;background:#f8fafc;border:1px solid var(--line)}
+.tabs{display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap}.tabs button{border:1px solid var(--line);background:#fff;border-radius:99px;padding:6px 14px;cursor:pointer;font:inherit}.tabs button.on{background:var(--acc);color:#fff;border-color:var(--acc)}
+details summary{cursor:pointer;list-style:none}
+.warn{background:#fef3c7;color:#92400e;border-radius:10px;padding:8px 12px;font-size:12px;margin-top:8px}
+.timer{font-size:42px;font-weight:700;font-variant-numeric:tabular-nums}
+</style>
+</head>
+<body>
+<aside>
+  <h1>Job <span>Assist</span></h1>
+  <nav id="nav"></nav>
+  <div class="foot" id="saved">—</div>
+</aside>
+<main id="view"></main>
+<script src="defaults.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
