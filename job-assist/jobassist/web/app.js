@@ -2,7 +2,7 @@
 let S = {};
 let INFO = {};
 let tab = 'dash';
-const sub = { vac: 'board', profile: 'about', prep: 'grill' };
+const sub = { vac: 'board', profile: 'about', prep: 'grill', help: 'start', msg: '' };
 let found = [];
 let showRejected = false;
 let auditText = '';
@@ -63,6 +63,12 @@ function initState(s) {
   s.tasks ??= [];
   s.routines ??= {};
   for (const v of s.vacancies) { v.checks ??= {}; v.ai ??= {}; v.status ??= 'start'; }
+  if ((s.defaults_v || 1) < 2) {
+    // новые шаблоны и вопросы добавляются к уже сохранённым данным, свои правки пользователя не трогаем
+    for (const m of MESSAGES) { const own = s.messages.find((x) => x.title === m.title); if (own) own.cat ??= m.cat; else s.messages.push({ id: uid(), ...m }); }
+    for (const q of QUESTIONS) if (!s.questions.some((x) => x.q === q.q)) s.questions.push({ ...q, id: uid() });
+    s.defaults_v = 2;
+  }
   return s;
 }
 
@@ -82,7 +88,7 @@ function statusOf(v) {
   return v.status;
 }
 
-const TABS = [['dash', 'Дашборд'], ['vac', 'Вакансии'], ['profile', 'Профиль'], ['prep', 'Подготовка'], ['network', 'Компании и контакты'], ['tasks', 'Задачи и рутины'], ['settings', 'Настройки']];
+const TABS = [['dash', 'Дашборд'], ['vac', 'Вакансии'], ['profile', 'Профиль'], ['prep', 'Подготовка'], ['network', 'Компании и контакты'], ['tasks', 'Задачи и рутины'], ['help', 'Справка'], ['settings', 'Настройки']];
 
 function go(t) { tab = t; render(); }
 function subTabs(key, items) { return `<div class="tabs">${items.map(([id, n]) => `<button class="${sub[key] === id ? 'on' : ''}" onclick="sub.${key}='${id}';render()">${n}</button>`).join('')}</div>`; }
@@ -90,10 +96,25 @@ function subTabs(key, items) { return `<div class="tabs">${items.map(([id, n]) =
 function render() {
   $('#nav').innerHTML = TABS.map(([id, n]) => `<button class="nav ${id === tab ? 'on' : ''}" onclick="go('${id}')">${n}</button>`).join('');
   $('#view').innerHTML = VIEWS[tab]();
+  if (HELP[tab]) $('#view h2')?.insertAdjacentHTML('beforeend', `<button class="qhelp" title="Что здесь и как пользоваться" onclick="showHelp('${tab}')">?</button>`);
   if (tab === 'prep') tickSim();
 }
 
 const VIEWS = {};
+
+// ---------- Справка ----------
+const helpCard = (h) => `<div class="card"><h3>${h.title}</h3><div>${h.what}</div><ul>${h.how.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div>`;
+const bestCard = (id, b) => `<div class="card"><h3>${id}. ${b.title}</h3><b class="mute">Делать</b><ul>${b.do.map((x) => `<li>${esc(x)}</li>`).join('')}</ul><b class="mute">Избегать</b><ul>${b.avoid.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div>`;
+function showHelp(t) { modal(`${helpCard(HELP[t])}<div class="row" style="margin-top:10px"><button class="b g auto" onclick="closeModal();go('help')">Вся справка</button><button class="b auto" onclick="closeModal()">Понятно</button></div>`); }
+VIEWS.help = () => `<h2>Справка</h2>${subTabs('help', [['start', 'С чего начать'], ['sections', 'Что за что отвечает'], ['best', 'Лучшие практики по этапам'], ['data', 'Данные и ИИ']])}${HELPV[sub.help]()}`;
+const HELPV = {
+  start: () => `<div class="card"><h3>Порядок работы</h3><ol>${START_STEPS.map((x) => `<li style="margin:4px 0">${esc(x)}</li>`).join('')}</ol>
+    <div class="mute">Подробный чек-лист из 9 шагов с прогрессом есть в разделе «Задачи и рутины». Кнопка «?» рядом с заголовком любого раздела открывает подсказку по нему.</div></div>`,
+  sections: () => `<div class="grid g2">${Object.values(HELP).map(helpCard).join('')}</div>`,
+  best: () => `<div class="grid g2">${Object.entries(BEST).map(([id, b]) => bestCard(id, b)).join('')}</div>`,
+  data: () => `<div class="grid g2"><div class="card"><h3>Где хранятся данные</h3><ul><li>Всё хранится локально в базе SQLite в папке пользователя (%APPDATA%\\JobAssist в Windows).</li><li>Все версии программы работают с одной базой: обновление exe данные не теряет.</li><li>Перенос на другой компьютер: Настройки → «Бэкап JSON» и «Импорт JSON».</li><li>Наружу уходят только запросы к API hh.ru и к выбранному ИИ-провайдеру.</li></ul></div>
+    <div class="card"><h3>Что делает ИИ</h3><ul><li>Работает только по кнопкам: разбор резюме, прожарка, ядро рынка, ИИ-помощник в карточке вакансии, mock-интервью, аудит воронки.</li><li>Перед первой отправкой резюме ИИ спрашивается согласие.</li><li>Ключ задаётся переменной окружения (например GEMINI_API_KEY) или в Настройках.</li><li>Всё остальное (балл вакансий, разбор резюме правилами, аналитика) считается без ИИ.</li></ul></div></div>`,
+};
 
 // ---------- Дашборд ----------
 VIEWS.dash = () => {
@@ -254,7 +275,8 @@ function setStage(id, stage) {
   v.stage = stage; v.status = v.status === 'reject' ? 'reject' : 'start'; v.updated = today(); save(); render();
 }
 
-const AI_TASKS = { analyze: 'Gap-анализ', cv_adapt: 'Резюме под вакансию', cover_letter: 'Сопроводительное', brief: 'Бриф к интервью', ping_hr: 'Пинг HR', recruiter_reply: 'Ответ рекрутеру' };
+const AI_TASKS = { analyze: 'Gap-анализ', cv_adapt: 'Резюме под вакансию', cover_letter: 'Сопроводительное', brief: 'Бриф к интервью', ping_hr: 'Пинг HR', recruiter_reply: 'Ответ рекрутеру',
+  salary_answer: 'Ответ про зарплату', offer_negotiation: 'Торг по офферу', feedback_request: 'Запрос фидбэка', decline: 'Вежливый отказ' };
 
 function openCard(id) {
   const v = byId('vacancies', id);
@@ -271,6 +293,7 @@ function openCard(id) {
     <div class="grid g2"><div><label>Заметки</label><textarea onchange="upd('${id}','notes',this.value)">${esc(v.notes)}</textarea></div>
       <div><label>Профайл компании</label><textarea onchange="upd('${id}','profile',this.value)">${esc(v.profile)}</textarea></div></div>
     <label>Текст вакансии ${v.source === 'hh' ? `<a href="#" onclick="loadFull('${id}');return false">(загрузить полный с hh.ru)</a>` : ''}</label><textarea id="vtext" style="min-height:90px" onchange="upd('${id}','text',this.value)">${esc(v.text)}</textarea>
+    ${BEST[v.stage] ? `<details class="tip"><summary>💡 Лучшие практики этапа «${stageName(v.stage)}»</summary><b class="mute">Делать</b><ul>${BEST[v.stage].do.map((x) => `<li>${esc(x)}</li>`).join('')}</ul><b class="mute">Избегать</b><ul>${BEST[v.stage].avoid.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></details>` : ''}
     <h3 style="margin-top:14px">Чек-лист этапа «${stageName(v.stage)}»</h3>${(ROUTINES[v.stage] || []).map((t, i) => `<label class="chk"><input type="checkbox" ${v.checks[v.stage + '.' + i] ? 'checked' : ''} onchange="byId('vacancies','${id}').checks['${v.stage}.${i}']=this.checked;save()"> ${esc(t)}</label>`).join('')}
     <h3 style="margin-top:14px">ИИ-помощник</h3><div class="row">${Object.entries(AI_TASKS).map(([k, n]) => `<button class="b g s auto" onclick="runAi('${id}','${k}')">${n}</button>`).join('')}</div>
     <div id="aiout">${Object.entries(v.ai).map(([k, t]) => aiBlock(k, t)).join('')}</div>
@@ -378,7 +401,7 @@ function reviewImport() {
     ${row('salary', 'Ожидания по зарплате', m.salary && money(m.salary))}${row('formats', 'Формат работы', m.formats.join(', '))}${row('keywords', 'Ключевые слова (для скоринга)', m.keywords)}
     ${row('skills', `Навыки в матрицу (${m.skills.length}, оценка 0)`, blocks.map((b) => `${b}: ${m.skills.filter((x) => x.block === b).map((x) => x.name).join(', ')}`).join(' · '))}
     ${row('jobs', `Места работы (${m.jobs.length})`, m.jobs.map((j) => `${j.title} — ${j.company}`).join('; '))}${row('about', 'О себе', m.about && m.about.slice(0, 160) + (m.about.length > 160 ? '…' : ''))}
-    ${row('resume', 'Текст резюме → новая версия резюме', m.text && `${m.text.length} символов`)}</div>
+    ${row('resume', S.resumes.some((r) => r.name === m.filename) ? 'Текст резюме → обновить версию с этим именем' : 'Текст резюме → новая версия резюме', m.text && `${m.text.length} символов`)}</div>
     <div class="row" style="margin-top:12px">${weak ? `<button class="b auto" id="imp_ai" onclick="aiImport()">Разобрать через ИИ</button><button class="b g auto" onclick="applyImport()">Применить найденное</button>`
       : `<button class="b auto" onclick="applyImport()">Применить</button><button class="b g auto" id="imp_ai" onclick="aiImport()">${m.ai ? 'Разобрать через ИИ ещё раз' : 'Уточнить через ИИ'}</button>`}</div>`);
 }
@@ -390,8 +413,9 @@ function applyImport() {
   if (on('formats')) S.profile.formats = m.formats;
   if (on('skills')) for (const x of m.skills) if (!S.skills.some((s) => s.name.toLowerCase() === x.name.toLowerCase())) S.skills.push({ id: uid(), block: x.block, name: x.name, level: 0, proof: '' });
   if (on('resume')) {
-    const empty = S.resumes.find((r) => !r.text);
-    if (empty) Object.assign(empty, { name: m.filename, text: m.text }); else S.resumes.push({ id: uid(), name: m.filename, url: '', text: m.text });
+    // тот же файл повторно обновляет свою карточку, а не плодит версии
+    const same = S.resumes.find((r) => r.name === m.filename) || S.resumes.find((r) => !r.text);
+    if (same) Object.assign(same, { name: m.filename, text: m.text }); else S.resumes.push({ id: uid(), name: m.filename, url: '', text: m.text });
   }
   imported = null; closeModal(); save(); render(); toast('Профиль обновлён из резюме');
 }
@@ -512,9 +536,16 @@ PREP.self = () => `<div class="grid g2">${S.selfPresentation.map((x, i) => `<div
   <div class="card" style="margin-top:10px"><b>Целиком</b> <a href="#" onclick="copy(S.selfPresentation.map(x=>x.text).filter(Boolean).join('\\n\\n'));return false">копировать</a>
     <div class="ai-out">${esc(S.selfPresentation.map((x) => x.text).filter(Boolean).join('\n\n') || 'Заполните блоки выше.')}</div></div>`;
 
-PREP.messages = () => `<div class="grid g2">${S.messages.map((m) => `<div class="card"><div class="row"><input value="${esc(m.title)}" onchange="byId('messages','${m.id}').title=this.value;save()"><button class="b g s auto" onclick="copy(byId('messages','${m.id}').text)">Копировать</button><button class="b g s auto" onclick="delItem('messages','${m.id}')">✕</button></div>
+PREP.messages = () => {
+  const order = [...new Set(MESSAGES.map((m) => m.cat))];
+  const cats = [...new Set([...order, ...S.messages.map((m) => m.cat || 'Свои')])].filter((c) => S.messages.some((m) => (m.cat || 'Свои') === c));
+  const list = S.messages.filter((m) => !sub.msg || (m.cat || 'Свои') === sub.msg);
+  return `<div class="tabs"><button class="${!sub.msg ? 'on' : ''}" onclick="sub.msg='';render()">Все (${S.messages.length})</button>${cats.map((c) => `<button class="${sub.msg === c ? 'on' : ''}" onclick="sub.msg='${esc(c)}';render()">${esc(c)}</button>`).join('')}</div>
+  <div class="mute" style="margin-bottom:10px">Подставьте значения в [скобках]. Шаблоны можно править: изменения сохраняются. Персональную версию под конкретную вакансию сделает ИИ-помощник в карточке.</div>
+  <div class="grid g2">${list.map((m) => `<div class="card"><div class="row"><input value="${esc(m.title)}" onchange="byId('messages','${m.id}').title=this.value;save()"><span class="pill auto">${esc(m.cat || 'Свои')}</span><button class="b g s auto" onclick="copy(byId('messages','${m.id}').text)">Копировать</button><button class="b g s auto" onclick="delItem('messages','${m.id}')">✕</button></div>
     <textarea style="min-height:130px;margin-top:6px" onchange="byId('messages','${m.id}').text=this.value;save()">${esc(m.text)}</textarea></div>`).join('')}</div>
-  <button class="b g" style="margin-top:8px" onclick="S.messages.push({id:uid(),title:'Новый шаблон',text:''});save();render()">+ Шаблон</button>`;
+  <button class="b g" style="margin-top:10px" onclick="S.messages.push({id:uid(),cat:sub.msg||'Свои',title:'Новый шаблон',text:''});save();render()">+ Шаблон</button>`;
+};
 
 PREP.mine = () => `<div class="card"><table><tr><th>Кому</th><th>Вопрос</th><th>Что ожидаю услышать / red flags</th><th></th></tr>
   ${S.empQuestions.map((e) => `<tr><td><span class="pill">${esc(e.group)}</span></td><td><input value="${esc(e.text)}" onchange="byId('empQuestions','${e.id}').text=this.value;save()"></td><td><input value="${esc(e.expect)}" onchange="byId('empQuestions','${e.id}').expect=this.value;save()"></td><td><button class="b g s" onclick="delItem('empQuestions','${e.id}')">✕</button></td></tr>`).join('')}</table>
@@ -559,10 +590,18 @@ VIEWS.settings = () => {
     <h3 style="margin-top:16px">Данные</h3><div class="mute">База: ${esc(INFO.data_file || '')}</div>
     <div class="row" style="margin-top:10px"><a class="b auto" href="/api/export/xlsx" download onclick="flushSave()">Экспорт в Excel</a><a class="b g auto" href="/api/export/json" download onclick="flushSave()">Бэкап JSON</a>
       <label class="b g auto">Импорт JSON<input type="file" accept=".json" hidden onchange="importData(this.files[0])"></label></div>
-    <div class="mute" style="margin-top:6px">API-ключ в бэкап не попадает.</div></div></div>`;
+    <div class="mute" style="margin-top:6px">API-ключ в бэкап не попадает.</div>
+    <h3 style="margin-top:16px">Очистка</h3><div class="mute">Удаляет профиль, резюме, вакансии, навыки, контакты и заметки. Настройки ИИ сохраняются. Перед очисткой сделайте «Бэкап JSON», если данные нужны.</div>
+    <button class="b r" style="margin-top:8px" onclick="clearAll()">Очистить все данные</button></div></div>`;
 };
 
 function flushSave() { clearTimeout(saveT); fetch('/api/state', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(S), keepalive: true }); }
+
+function clearAll() {
+  if (!confirm('Удалить все данные приложения? Отменить это нельзя.')) return;
+  const settings = S.settings;
+  S = initState({ settings }); save(); tab = 'dash'; render(); toast('Данные очищены');
+}
 
 async function importData(file) {
   try {
