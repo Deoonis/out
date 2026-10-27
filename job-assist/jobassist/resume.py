@@ -3,11 +3,11 @@ import io
 import re
 
 HEADERS = {
-    "desired": ("Желаемая должность и зарплата", "Desired position and salary"),
+    "desired": ("Желаемая должность", "Desired position"),
     "experience": ("Опыт работы", "Work experience"),
     "education": ("Образование", "Education"),
     "courses": ("Повышение квалификации", "Professional development"),
-    "skills": ("Навыки", "Skills"),
+    "skills": ("Навыки", "Ключевые навыки", "Skills", "Key skills"),
     "extra": ("Дополнительная информация", "Additional information"),
     "about": ("Обо мне", "About me"),
 }
@@ -61,6 +61,9 @@ def parse_hh(text: str) -> dict:
     e = _index(lines, "experience")
     if d >= 0:
         block = lines[d + 1:e if e > d else len(lines)]
+        rest = re.sub(r"^(Желаемая должность( и зарплата)?|Desired position( and salary)?)[:\s]*", "", lines[d]).strip()
+        if rest:
+            block = [rest] + block  # заголовок и должность склеены в одну строку
         if block:
             out["title"] = block[0]
         out["specializations"] = [re.sub(r"^[—–-]\s*", "", x) for x in block if re.match(r"^[—–-]\s", x)]
@@ -74,6 +77,9 @@ def parse_hh(text: str) -> dict:
         emp = re.search(r"(Тип занятости|Employment):\s*(.+?)(?=\s[А-ЯA-Z][^:]{2,40}:|$)", joined)
         if emp:
             out["employment"] = emp.group(2).strip()
+    g = next((i for i, x in enumerate(lines[:6]) if re.match(r"^(Мужчина|Женщина|Male|Female)", x)), -1)
+    if g > 0:
+        out["name"] = lines[g - 1]
     city = next((x.split(":", 1)[1].strip() for x in lines if x.startswith(("Проживает:", "Location:"))), "")
     if city:
         out["city"] = city
@@ -83,14 +89,20 @@ def parse_hh(text: str) -> dict:
             out["experience_total"] = m.group(1).strip()
         out["jobs"] = _jobs(lines[e + 1:_end_of_experience(lines, e)])
 
-    s = next((i for i in range(len(lines)) if re.match(r"^(Навыки|Skills)\s{2,}\S", lines[i])), -1)
+    s = next((i for i in range(len(lines)) if re.match(r"^(Ключевые навыки|Навыки|Key skills|Skills)\s*(:|\s{2,})\s*\S", lines[i])), -1)
+    if s < 0:  # заголовок отдельной строкой, а навыки ниже (после блока языков)
+        s = next((i for i in range(len(lines)) if re.match(r"^(Ключевые навыки|Навыки|Key skills|Skills)\s*:?$", lines[i])), -1)
     if s >= 0:
-        chunk = [lines[s].split(None, 1)[1]]
+        head = re.sub(r"^(Ключевые навыки|Навыки|Key skills|Skills)\s*:?", "", lines[s]).strip()
+        chunk = [head] if head else []
         for x in lines[s + 1:]:
             if re.match(r"^(Опыт вождения|Права|Дополнительная|Обо мне|Driving|Additional|About)", x):
                 break
+            if re.match(r"^(Знание языков|Languages)", x) or ("—" in x and re.search(r"(Родной|Native|A1|A2|B1|B2|C1|C2)", x)):
+                continue
             chunk.append(x)
-        out["skills"] = [k.strip() for k in re.split(r"\s{2,}", "  ".join(c.strip() for c in chunk)) if k.strip()]
+        sep = r"\s{2,}|\s*[•·;,|]\s*" if any(re.search(r"\s{2,}|[•·;,|]", c) for c in chunk) else r"\n"
+        out["skills"] = [k.strip(" -—–") for k in re.split(sep, "\n".join(c.strip() for c in chunk) if sep == r"\n" else "  ".join(c.strip() for c in chunk)) if k.strip(" -—–") and len(k) < 80]
     langs = [x.replace("Знание языков", "").strip() for x in lines if "—" in x and re.search(r"(Родной|Native|A1|A2|B1|B2|C1|C2)", x)]
     if langs:
         out["languages"] = langs

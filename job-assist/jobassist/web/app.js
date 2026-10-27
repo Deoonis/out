@@ -45,7 +45,7 @@ function copy(text) { navigator.clipboard.writeText(text); toast('Скопиро
 
 // ---------- состояние ----------
 function initState(s) {
-  s.profile = { name: '', title: '', sphere: '', roles: '', keywords: '', stopwords: '', salary: '', formats: [], goal: '', strategy: '', ...s.profile };
+  s.profile = { name: '', city: '', experience: '', about: '', jobs: '', title: '', sphere: '', roles: '', keywords: '', stopwords: '', salary: '', formats: [], goal: '', strategy: '', ...s.profile };
   s.settings = { ai_provider: 'gemini', ai_model: '', ai_base_url: '', ai_key: '', ai_temperature: 0.6, weekly_goal: 15, sla_days: 3, ...s.settings };
   s.resumes ??= [{ id: uid(), name: 'Основное резюме', url: '', text: '' }];
   s.vacancies ??= [];
@@ -324,9 +324,10 @@ PROFILE.about = () => {
   const t = (k, n, ph) => `<div><label>${n}</label><textarea placeholder="${ph}" onchange="S.profile['${k}']=this.value;save()">${esc(p[k])}</textarea></div>`;
   return `<div class="card"><h3>Импорт резюме</h3><div class="mute" style="margin-bottom:10px">Приложение выделит должность, роли, зарплату, формат работы и навыки. Перед применением покажет, что найдено.</div>${uploadBox()}</div>
   <div class="card" style="margin-top:14px"><div class="row">${f('name', 'Имя')}${f('title', 'Желаемая должность')}${f('sphere', 'Сфера / отрасль')}${f('salary', 'Ожидания по зарплате', 'число')}</div>
-    <div class="row">${f('goal', 'Цель поиска')}</div>
+    <div class="row">${f('city', 'Город')}${f('experience', 'Общий опыт')}${f('goal', 'Цель поиска')}</div>
     <label>Формат работы</label><div class="row">${['удалёнка', 'гибрид', 'офис'].map((x) => `<label class="chk auto"><input type="checkbox" ${p.formats.includes(x) ? 'checked' : ''} onchange="toggleFormat('${x}',this.checked)"> ${x}</label>`).join('')}</div>
-    ${t('strategy', 'Стратегия поиска', 'Какие компании, каналы и темп откликов')}</div>
+    ${t('strategy', 'Стратегия поиска', 'Какие компании, каналы и темп откликов')}
+    <div class="grid g2">${t('jobs', 'Места работы', 'Период: должность, компания')}${t('about', 'О себе', 'Кратко о себе')}</div></div>
   <div class="card" style="margin-top:14px"><h3>Скоринг вакансий</h3><div class="mute">Балл 0–100 считается по этим словам: роль в названии вакансии, навыки в тексте, зарплата, формат, стоп-слова. Можно писать часть слова.</div>
     <div class="grid g2">${t('roles', 'Целевые роли (через запятую)', 'например: менеджер проектов, project manager')}${t('keywords', 'Ключевые навыки и домен (через запятую)', 'например: agile, бюджет, b2b')}${t('stopwords', 'Стоп-слова (через запятую)', 'например: стажёр, холодные звонки')}</div></div>`;
 };
@@ -345,10 +346,10 @@ async function importResume(file) {
   try {
     const r = await api('resume/parse', { filename: file.name, data: await fileToBase64(file) });
     const f = r.fields;
-    imported = { text: r.text, filename: file.name, ai: false,
+    imported = { text: r.text, filename: file.name, ai: false, name: f.name || '', city: f.city || '', experience: f.experience_total || '',
       title: f.title || '', roles: [...new Set([f.title, ...(f.specializations || [])].filter(Boolean).map(s => s.trim()))].join(', '), sphere: '',
       salary: f.salary || '', formats: f.formats || [], keywords: (f.skills || []).join(', '),
-      skills: (f.skills || []).map((name) => ({ block: 'Навыки из резюме', name })), about: f.about || '', jobs: f.jobs || [], is_hh: f.is_hh };
+      skills: (f.skills || []).map((name) => ({ block: 'Навыки из резюме', name })), about: f.about || '', jobs: f.jobs || [], jobsText: (f.jobs || []).map((j) => `${j.period}: ${j.title}, ${j.company}`).join('\n'), is_hh: f.is_hh };
     reviewImport();
   } catch (e) { toast('Ошибка импорта: ' + e.message); }
 }
@@ -369,19 +370,23 @@ function reviewImport() {
   const m = imported;
   const row = (k, n, v) => `<label class="chk" style="align-items:flex-start"><input type="checkbox" data-k="${k}" ${v ? 'checked' : 'disabled'}><span><b>${n}:</b> ${esc(v) || '<span class="mute">не найдено</span>'}</span></label>`;
   const blocks = [...new Set(m.skills.map((x) => x.block))];
+  const weak = !m.ai && (!m.title || !m.skills.length);
   modal(`<h3>Что найдено в «${esc(m.filename)}»</h3>
-    <div class="mute">${m.is_hh ? 'Распознан формат hh.ru.' : 'Формат hh.ru не распознан: правилами найдено мало, попробуйте разбор через ИИ.'} ${m.ai ? 'Поля уточнены ИИ.' : ''} Отметьте, что применить. Пустые поля профиля заполнятся, заполненные будут заменены.</div>
-    <div style="margin-top:10px">${row('title', 'Желаемая должность', m.title)}${row('roles', 'Целевые роли (для скоринга)', m.roles)}${row('sphere', 'Сфера', m.sphere)}
+    ${weak ? `<div class="warn">Правилами найдено мало: ${m.is_hh ? 'вёрстка PDF отличается от ожидаемой' : 'формат hh.ru не распознан'}. Нажмите «Разобрать через ИИ»: ИИ заполнит должность, роли, навыки и зарплату (нужен ключ ИИ в Настройках).</div>` : ''}
+    <div class="mute">${m.is_hh && !weak ? 'Распознан формат hh.ru.' : ''} ${m.ai ? 'Поля уточнены ИИ.' : ''} Отметьте, что применить. Пустые поля профиля заполнятся, заполненные будут заменены.</div>
+    <div style="margin-top:10px">${row('name', 'Имя', m.name)}${row('city', 'Город', m.city)}${row('experience', 'Общий опыт', m.experience)}${row('title', 'Желаемая должность', m.title)}${row('roles', 'Целевые роли (для скоринга)', m.roles)}${row('sphere', 'Сфера', m.sphere)}
     ${row('salary', 'Ожидания по зарплате', m.salary && money(m.salary))}${row('formats', 'Формат работы', m.formats.join(', '))}${row('keywords', 'Ключевые слова (для скоринга)', m.keywords)}
     ${row('skills', `Навыки в матрицу (${m.skills.length}, оценка 0)`, blocks.map((b) => `${b}: ${m.skills.filter((x) => x.block === b).map((x) => x.name).join(', ')}`).join(' · '))}
+    ${row('jobs', `Места работы (${m.jobs.length})`, m.jobs.map((j) => `${j.title} — ${j.company}`).join('; '))}${row('about', 'О себе', m.about && m.about.slice(0, 160) + (m.about.length > 160 ? '…' : ''))}
     ${row('resume', 'Текст резюме → новая версия резюме', m.text && `${m.text.length} символов`)}</div>
-    ${m.jobs.length ? `<div class="mute" style="margin-top:8px">Опыт: ${m.jobs.map((j) => esc(`${j.title} — ${j.company} (${j.period})`)).join('; ')}</div>` : ''}
-    <div class="row" style="margin-top:12px"><button class="b auto" onclick="applyImport()">Применить</button><button class="b g auto" id="imp_ai" onclick="aiImport()">${m.ai ? 'Разобрать через ИИ ещё раз' : 'Уточнить через ИИ'}</button></div>`);
+    <div class="row" style="margin-top:12px">${weak ? `<button class="b auto" id="imp_ai" onclick="aiImport()">Разобрать через ИИ</button><button class="b g auto" onclick="applyImport()">Применить найденное</button>`
+      : `<button class="b auto" onclick="applyImport()">Применить</button><button class="b g auto" id="imp_ai" onclick="aiImport()">${m.ai ? 'Разобрать через ИИ ещё раз' : 'Уточнить через ИИ'}</button>`}</div>`);
 }
 
 function applyImport() {
   const m = imported, on = (k) => document.querySelector(`.modal [data-k="${k}"]`)?.checked;
-  for (const k of ['title', 'roles', 'sphere', 'salary', 'keywords']) if (on(k)) S.profile[k] = String(m[k]);
+  for (const k of ['name', 'city', 'experience', 'title', 'roles', 'sphere', 'salary', 'keywords', 'about']) if (on(k)) S.profile[k] = String(m[k]);
+  if (on('jobs')) S.profile.jobs = m.jobsText;
   if (on('formats')) S.profile.formats = m.formats;
   if (on('skills')) for (const x of m.skills) if (!S.skills.some((s) => s.name.toLowerCase() === x.name.toLowerCase())) S.skills.push({ id: uid(), block: x.block, name: x.name, level: 0, proof: '' });
   if (on('resume')) {

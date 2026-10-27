@@ -94,10 +94,21 @@ class ResumeTest(unittest.TestCase):
         self.resume = resume
         self.text = (Path(__file__).parent / "fixture_hh_resume.txt").read_text(encoding="utf-8")
 
+    def test_parse_hh_layout_variants(self):
+        skills_line = "Навыки  Agile      Scrum      MS Project      Управление рисками\nБюджетирование      Jira"
+        glued = (self.text.replace("Желаемая должность и зарплата\nРуководитель проектов", "Желаемая должность и зарплата Руководитель проектов")
+                 .replace(skills_line, "Ключевые навыки\nAgile\nScrum\nJira").replace("Навыки\nЗнание языков", "Знание языков", 1))
+        r = self.resume.parse_hh(glued)
+        self.assertEqual(r["title"], "Руководитель проектов")
+        self.assertEqual(r["skills"], ["Agile", "Scrum", "Jira"])
+        r = self.resume.parse_hh(self.text.replace(skills_line, "Навыки: Agile, Scrum, Jira"))
+        self.assertEqual(r["skills"], ["Agile", "Scrum", "Jira"])
+
     def test_parse_hh(self):
         r = self.resume.parse_hh(self.text)
         self.assertTrue(r["is_hh"])
         self.assertEqual(r["title"], "Руководитель проектов")
+        self.assertEqual(r["name"], "Иванов Тест")
         self.assertEqual(r["specializations"], ["Руководитель проектов", "Менеджер продукта"])
         self.assertEqual(r["salary"], "250000")
         self.assertEqual(r["formats"], ["гибрид", "удалёнка"])
