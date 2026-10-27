@@ -109,7 +109,7 @@ VIEWS.dash = () => {
   const reasons = REJECT_REASONS.map((r) => [r, S.rejections.filter((x) => x.reason === r).length]).filter((x) => x[1]);
   const onboarding = !S.profile.title && !S.profile.roles ? `<div class="card" style="margin-bottom:14px;border-color:var(--acc)"><h3>Начните с импорта резюме</h3>
     <div class="mute">Загрузите резюме, скачанное с hh.ru (PDF, DOCX или TXT): приложение заполнит должность, навыки, ожидания и формат работы. Дальше по шагам алгоритма во вкладке «Задачи и рутины».</div>
-    <button class="b" style="margin-top:10px" onclick="tab='profile';sub.profile='about';render()">Импортировать резюме</button></div>` : '';
+    <div style="margin-top:10px">${uploadBox()}</div></div>` : '';
   return `<h2>Дашборд</h2>${onboarding}
   <div class="grid g5">${[[`${week} / ${goal}`, 'Откликов за 7 дней / цель'], [n, 'Всего откликов'], [active, 'В работе'], [remind.length, 'Нужен пинг HR'],
     [conv(3) + '%', 'Дошли до HR'], [conv(5) + '%', 'Дошли до профильного'], [conv(7) + '%', 'Офферы'], [median + ' дн.', 'Медиана жизни отклика']]
@@ -322,8 +322,7 @@ PROFILE.about = () => {
   const p = S.profile;
   const f = (k, n, ph = '') => `<div><label>${n}</label><input value="${esc(p[k])}" placeholder="${ph}" onchange="S.profile['${k}']=this.value;save()"></div>`;
   const t = (k, n, ph) => `<div><label>${n}</label><textarea placeholder="${ph}" onchange="S.profile['${k}']=this.value;save()">${esc(p[k])}</textarea></div>`;
-  return `<div class="card"><h3>Импорт резюме</h3><div class="mute">Скачайте резюме на hh.ru («Скачать» → PDF) или загрузите DOCX / TXT. Перед применением покажу, что найдено.</div>
-    <label class="b auto" style="display:inline-block;margin-top:10px;color:#fff">Выбрать файл<input type="file" accept=".pdf,.docx,.txt,.md" style="display:none" onchange="importResume(this.files[0])"></label></div>
+  return `<div class="card"><h3>Импорт резюме</h3><div class="mute" style="margin-bottom:10px">Приложение выделит должность, роли, зарплату, формат работы и навыки. Перед применением покажет, что найдено.</div>${uploadBox()}</div>
   <div class="card" style="margin-top:14px"><div class="row">${f('name', 'Имя')}${f('title', 'Желаемая должность')}${f('sphere', 'Сфера / отрасль')}${f('salary', 'Ожидания по зарплате', 'число')}</div>
     <div class="row">${f('goal', 'Цель поиска')}</div>
     <label>Формат работы</label><div class="row">${['удалёнка', 'гибрид', 'офис'].map((x) => `<label class="chk auto"><input type="checkbox" ${p.formats.includes(x) ? 'checked' : ''} onchange="toggleFormat('${x}',this.checked)"> ${x}</label>`).join('')}</div>
@@ -332,6 +331,13 @@ PROFILE.about = () => {
     <div class="grid g2">${t('roles', 'Целевые роли (через запятую)', 'например: менеджер проектов, project manager')}${t('keywords', 'Ключевые навыки и домен (через запятую)', 'например: agile, бюджет, b2b')}${t('stopwords', 'Стоп-слова (через запятую)', 'например: стажёр, холодные звонки')}</div></div>`;
 };
 let imported = null;
+
+function uploadBox(hint) {
+  return `<div class="drop" ondragover="event.preventDefault();this.classList.add('over')" ondragleave="this.classList.remove('over')"
+    ondrop="event.preventDefault();this.classList.remove('over');importResume(event.dataTransfer.files[0])">
+    <label class="b big">📄 Загрузить резюме<input type="file" accept=".pdf,.docx,.txt,.md" hidden onchange="importResume(this.files[0]);this.value=''"></label>
+    <div class="mute">${hint || 'PDF, скачанный с hh.ru («Скачать» → PDF), DOCX или TXT. Можно перетащить файл сюда.'}</div></div>`;
+}
 
 async function importResume(file) {
   if (!file) return;
@@ -387,7 +393,7 @@ function applyImport() {
 
 function toggleFormat(x, on) { const f = S.profile.formats; S.profile.formats = on ? [...new Set([...f, x])] : f.filter((y) => y !== x); save(); }
 
-PROFILE.resumes = () => `<div class="grid g2">${S.resumes.map((r) => `<div class="card">
+PROFILE.resumes = () => `<div class="card" style="margin-bottom:14px"><h3>Загрузить резюме из файла</h3>${uploadBox('Файл станет новой версией резюме, данные профиля можно обновить в окне проверки.')}</div><div class="grid g2">${S.resumes.map((r) => `<div class="card">
     <div class="row"><input value="${esc(r.name)}" onchange="byId('resumes','${r.id}').name=this.value;save()"><button class="b g s auto" onclick="if(S.resumes.length>1&&confirm('Удалить версию?'))delItem('resumes','${r.id}')">✕</button></div>
     <label>Ссылка</label><input value="${esc(r.url)}" onchange="byId('resumes','${r.id}').url=this.value;save()">
     <label>Текст резюме (используется ИИ)</label><textarea style="min-height:200px" onchange="byId('resumes','${r.id}').text=this.value;save()">${esc(r.text)}</textarea>
@@ -547,7 +553,7 @@ VIEWS.settings = () => {
   <div class="card"><h3>Цели</h3>${inp('weekly_goal', 'Откликов за 7 дней', 'number')}${inp('sla_days', 'Дней без движения до «Нужен пинг»', 'number')}
     <h3 style="margin-top:16px">Данные</h3><div class="mute">База: ${esc(INFO.data_file || '')}</div>
     <div class="row" style="margin-top:10px"><a class="b auto" href="/api/export/xlsx" download onclick="flushSave()">Экспорт в Excel</a><a class="b g auto" href="/api/export/json" download onclick="flushSave()">Бэкап JSON</a>
-      <label class="b g auto" style="margin:0;color:var(--ink)">Импорт JSON<input type="file" accept=".json" style="display:none" onchange="importData(this.files[0])"></label></div>
+      <label class="b g auto">Импорт JSON<input type="file" accept=".json" hidden onchange="importData(this.files[0])"></label></div>
     <div class="mute" style="margin-top:6px">API-ключ в бэкап не попадает.</div></div></div>`;
 };
 
