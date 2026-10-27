@@ -57,6 +57,8 @@ def parse_hh(text: str) -> dict:
     out: dict = {"is_hh": _index(lines, "desired") >= 0 and _index(lines, "experience") >= 0}
     if not lines:
         return out
+    if not out["is_hh"]:
+        return {**out, **parse_generic(lines)}
     d = _index(lines, "desired")
     e = _index(lines, "experience")
     if d >= 0:
@@ -79,7 +81,7 @@ def parse_hh(text: str) -> dict:
             out["employment"] = emp.group(2).strip()
     g = next((i for i, x in enumerate(lines[:6]) if re.match(r"^(Мужчина|Женщина|Male|Female)", x)), -1)
     if g > 0:
-        out["name"] = lines[g - 1]
+        out["name"] = " ".join(lines[max(0, g - 3):g])  # ФИО бывает перенесено на две строки
     city = next((x.split(":", 1)[1].strip() for x in lines if x.startswith(("Проживает:", "Location:"))), "")
     if city:
         out["city"] = city
@@ -146,3 +148,104 @@ def _jobs(block: list[str]) -> list[dict]:
         jobs.append({"period": f"{start} — {end}", "company": company, "title": title})
         i = j + 1
     return jobs
+
+
+SECTIONS = {
+    "about": ("ОБОМНЕ", "ОСЕБЕ", "ABOUTME", "ABOUT", "SUMMARY", "PROFILE", "ПРОФИЛЬ"),
+    "experience": ("ОПЫТРАБОТЫ", "ОПЫТ", "WORKEXPERIENCE", "EXPERIENCE"),
+    "education": ("ОБРАЗОВАНИЕ", "EDUCATION"),
+    "skills": ("НАВЫКИ", "КЛЮЧЕВЫЕНАВЫКИ", "КОМПЕТЕНЦИИ", "SKILLS", "KEYSKILLS"),
+    "other": ("ЯЗЫКИ", "LANGUAGES", "КУРСЫ", "СЕРТИФИКАТЫ", "CERTIFICATES", "ДОСТИЖЕНИЯ", "ПРОЕКТЫ", "PROJECTS", "КОНТАКТЫ", "CONTACTS"),
+}
+PERIOD = rf"({MONTHS}\s+\d{{4}}|\d{{2}}\.\d{{4}}|\d{{4}})\s*[–—-]\s*(настоящее время|по настоящее время|наст\. время|present|now|{MONTHS}\s+\d{{4}}|\d{{2}}\.\d{{4}}|\d{{4}})"
+
+
+def _section(line: str) -> str:
+    """Заголовок раздела: КАПСОМ (в т.ч. «ОПЫТ Р АБОТЫ» из PDF) или обычный текст отдельной строкой."""
+    if len(line) > 40:
+        return ""
+    if re.match(r"^(Опыт работы|Work experience)\s*[—–-]", line):
+        return "experience"
+    key = re.sub(r"[^A-ZА-ЯЁ]", "", line.upper())
+    if line != line.upper() and not re.fullmatch(r"[А-ЯЁA-Z][а-яёa-z ]+", line):
+        return ""
+    return next((k for k, names in SECTIONS.items() if key in names), "")
+
+
+def _unwrap(lines: list[str]) -> str:
+    """Склеивает строки абзаца и переносы слов «проек-\nтами»."""
+    text = ""
+    for x in lines:
+        text = text[:-1] + x if text.endswith("-") and x[:1].islower() else (text + " " + x if text else x)
+    return text.strip()
+
+
+def parse_generic(lines: list[str]) -> dict:
+    """Резюме не с hh.ru (свой шаблон, LaTeX, Word): ищем разделы по заголовкам КАПСОМ."""
+    out: dict = {}
+    parts: dict = {}
+    cur = "head"
+    for x in lines:
+        sec = _section(x)
+        if sec:
+            cur = sec
+            continue
+        parts.setdefault(cur, []).append(x)
+    head = parts.get("head", [])
+    total = next((re.split(r"[—–-]", x, 1)[1].strip() for x in lines if re.match(r"^(Опыт работы|Work experience)\s*[—–-]\s*\d", x)), "")
+    if total:
+        out["experience_total"] = total
+    formats = {v for k, v in {**FORMAT_MAP, "офис": "офис", "office": "офис"}.items() if any(k in x.lower() for x in head[1:5])}
+    if formats:
+        out["formats"] = sorted(formats)
+    if head and re.fullmatch(r"[A-Za-zА-Яа-яЁё\- ]{5,60}", head[0]) and 2 <= len(head[0].split()) <= 4:
+        out["name"] = head[0].title() if head[0].isupper() else head[0]
+    for seg in re.split(r"[⋄•|·;]", " ⋄ ".join(head[1:4])):
+        seg = seg.strip().split(",")[0].strip()
+        if re.fullmatch(r"[А-ЯЁ][а-яё\-]+|[A-Z][a-z\-]+", seg) and seg not in ("Telegram", "Email", "Гражданство"):
+            out["city"] = seg
+            break
+    if parts.get("about"):
+        out["about"] = _unwrap(parts["about"])
+    jobs = []
+    for i, x in enumerate(parts.get("experience", [])):
+        m = re.search(PERIOD + r"\s*$", x)
+        if not m or x.startswith("•"):
+            continue
+        title = x[:m.start()].strip(" ,–—-")
+        nxt = parts["experience"][i + 1] if i + 1 < len(parts["experience"]) else ""
+        company = re.sub(r"\s+[А-ЯЁA-Z][а-яёa-z\-]+, [А-ЯЁA-Z][а-яёa-z\-]+$", "", nxt).strip()
+        if not title:  # период отдельной строкой: порядок блоков в PDF не надёжен, место работы не угадываем
+            continue
+        jobs.append({"period": m.group(0).strip(), "company": company, "title": title})
+    if jobs:
+        out["jobs"] = jobs
+        out["title"] = jobs[0]["title"]
+    elif len(head) > 1 and len(head[1]) <= 60 and not re.search(r"@|\+\d|\d{3}|telegram|http", head[1], re.I):
+        out["title"] = head[1]  # строка под ФИО: «Product Manager (FinTech, B2C)»
+    skills = []
+    raw = parts.get("skills", [])
+    if raw and not any(re.search(r"[•,;:]|\s{2,}", x) for x in raw):
+        # навыки через одиночный пробел: новый навык начинается с заглавной после строчной
+        raw = [", ".join(k for x in raw for k in re.split(r"(?<=[a-zа-яё0-9)])\s+(?=[A-ZА-ЯЁ])", x))]
+    for x in [_unwrap([y]) for y in _bullets(raw)]:
+        body = x.split(":", 1)[1] if ":" in x[:40] else x
+        items = [k.strip(" .–—-") for k in re.split(r"[,;•]", body)]
+        glued = any(re.fullmatch(r"[а-яё]{17,}", k) for k in items)  # PDF потерял пробелы в этом пункте
+        for k in items:
+            if k and len(k) <= 40 and not re.fullmatch(r"[а-яё]{17,}" if not glued else r"[а-яё]{10,}", k):
+                skills.append(k)
+    if skills:
+        out["skills"] = list(dict.fromkeys(skills))
+    return out
+
+
+def _bullets(lines: list[str]) -> list[str]:
+    """Собирает пункты списка: строка с «•» начинает пункт, остальные продолжают его."""
+    items: list[str] = []
+    for x in lines:
+        if x.startswith("•") or not items:
+            items.append(x.lstrip("• "))
+        else:
+            items[-1] = _unwrap([items[-1], x])
+    return items

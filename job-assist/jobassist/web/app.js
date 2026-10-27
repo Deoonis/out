@@ -373,7 +373,7 @@ function reviewImport() {
   const weak = !m.ai && (!m.title || !m.skills.length);
   modal(`<h3>Что найдено в «${esc(m.filename)}»</h3>
     ${weak ? `<div class="warn">Правилами найдено мало: ${m.is_hh ? 'вёрстка PDF отличается от ожидаемой' : 'формат hh.ru не распознан'}. Нажмите «Разобрать через ИИ»: ИИ заполнит должность, роли, навыки и зарплату (нужен ключ ИИ в Настройках).</div>` : ''}
-    <div class="mute">${m.is_hh && !weak ? 'Распознан формат hh.ru.' : ''} ${m.ai ? 'Поля уточнены ИИ.' : ''} Отметьте, что применить. Пустые поля профиля заполнятся, заполненные будут заменены.</div>
+    <div class="mute">${weak ? '' : m.is_hh ? 'Распознан формат hh.ru.' : 'Резюме разобрано по разделам.'} ${m.ai ? 'Поля уточнены ИИ.' : ''} Отметьте, что применить. Пустые поля профиля заполнятся, заполненные будут заменены.</div>
     <div style="margin-top:10px">${row('name', 'Имя', m.name)}${row('city', 'Город', m.city)}${row('experience', 'Общий опыт', m.experience)}${row('title', 'Желаемая должность', m.title)}${row('roles', 'Целевые роли (для скоринга)', m.roles)}${row('sphere', 'Сфера', m.sphere)}
     ${row('salary', 'Ожидания по зарплате', m.salary && money(m.salary))}${row('formats', 'Формат работы', m.formats.join(', '))}${row('keywords', 'Ключевые слова (для скоринга)', m.keywords)}
     ${row('skills', `Навыки в матрицу (${m.skills.length}, оценка 0)`, blocks.map((b) => `${b}: ${m.skills.filter((x) => x.block === b).map((x) => x.name).join(', ')}`).join(' · '))}

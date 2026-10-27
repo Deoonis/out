@@ -104,6 +104,17 @@ class ResumeTest(unittest.TestCase):
         r = self.resume.parse_hh(self.text.replace(skills_line, "Навыки: Agile, Scrum, Jira"))
         self.assertEqual(r["skills"], ["Agile", "Scrum", "Jira"])
 
+    def test_parse_generic_cv(self):
+        text = "\n".join(["ИВАНОВА ТЕСТ ТЕСТОВНА", "+70000000000⋄Казань, Россия", "ОБО МНЕ", "Project Manager с опытом управления проек-", "тами.",
+                          "ОПЫТ Р АБОТЫ", "Project ManagerНоябрь 2025 – настоящее время", "ООО Пример Казань, Россия", "•Координирую команды",
+                          "НАВЫКИ", "•Инструменты:Jira, Notion,", "Figma", "•Управление:планированиеикоординацияпроектов, контроль сроков"])
+        r = self.resume.parse_hh(text)
+        self.assertFalse(r["is_hh"])
+        self.assertEqual((r["name"], r["city"], r["title"]), ("Иванова Тест Тестовна", "Казань", "Project Manager"))
+        self.assertEqual(r["jobs"][0]["company"], "ООО Пример")
+        self.assertEqual(r["skills"], ["Jira", "Notion", "Figma", "контроль сроков"])
+        self.assertIn("проектами.", r["about"])
+
     def test_parse_hh(self):
         r = self.resume.parse_hh(self.text)
         self.assertTrue(r["is_hh"])
