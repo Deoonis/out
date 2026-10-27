@@ -28,6 +28,8 @@
 - **Импорт резюме** из PDF hh.ru, DOCX или TXT с проверкой найденного перед применением.
 - **Прожарка резюме** по методике [grill-my-resume-as-manager](https://github.com/letya999/grill-my-resume-as-manager) (MIT): без контекста, с контекстом поиска или против пула из 5–20 вакансий канбана.
 - **Ядро рынка:** ИИ выделяет требования из каждой вакансии один раз, частотность и покрытие резюме считаются локально.
+- **Справка** внутри приложения: порядок работы, что за что отвечает, кнопка «?» в каждом разделе, лучшие практики по каждому этапу воронки (и подсказка в карточке вакансии).
+- **Шаблоны сообщений** по сценариям (отклик, нетворкинг, рекрутер, статус, отказ, оффер), банк из 30 вопросов к интервью, ИИ-ответы про зарплату, торг по офферу, запрос фидбэка, вежливый отказ.
 - **Экспорт** в Excel и бэкап JSON.
 
 ## Запуск
@@ -90,6 +92,8 @@ A personal job search assistant: application CRM, funnel analytics, interview pr
 - **CV import** from hh.ru PDF, DOCX or TXT, with a review step before applying.
 - **CV grill** based on [grill-my-resume-as-manager](https://github.com/letya999/grill-my-resume-as-manager) (MIT): solo, with search context, or against a pool of 5–20 kanban vacancies.
 - **Market core:** AI extracts requirements from each vacancy once; frequency and CV coverage are computed locally.
+- **Built-in help:** getting started, what each section does, a «?» button in every section, best practices for each funnel stage (also shown on the vacancy card).
+- **Message templates** by scenario (application, networking, recruiter, status, rejection, offer), 30 interview questions, AI replies for salary questions, offer negotiation, feedback requests and polite declines.
 - **Export** to Excel and JSON backup.
 
 ### Run
