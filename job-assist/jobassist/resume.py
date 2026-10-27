@@ -13,6 +13,7 @@ HEADERS = {
 }
 FORMAT_MAP = {"удалённо": "удалёнка", "удаленно": "удалёнка", "remote": "удалёнка", "гибрид": "гибрид",
               "hybrid": "гибрид", "на месте работодателя": "офис", "on-site": "офис"}
+MONTHS_SHORT = r"(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec|Янв|Фев|Мар|Апр|Май|Июн|Июл|Авг|Сен|Окт|Ноя|Дек)[a-zа-я]*\.?"
 MONTHS = r"(Январь|Февраль|Март|Апрель|Май|Июнь|Июль|Август|Сентябрь|Октябрь|Ноябрь|Декабрь|January|February|March|April|May|June|July|August|September|October|November|December)"
 
 
@@ -20,7 +21,13 @@ def extract_text(filename: str, data: bytes) -> str:
     name = filename.lower()
     if name.endswith(".pdf"):
         from pypdf import PdfReader
-        return "\n".join(p.extract_text() or "" for p in PdfReader(io.BytesIO(data)).pages)
+        pages = PdfReader(io.BytesIO(data)).pages
+        text = "\n".join(p.extract_text() or "" for p in pages)
+        if _fragmented(text):
+            # PDF из Word/Google Docs: каждое слово отдельным объектом, обычный режим даёт «слово на строку»
+            text = "\n".join(p.extract_text(extraction_mode="layout") or "" for p in pages)
+            text = "\n".join(re.sub(r"\s{2,}", " ", x).strip() for x in text.splitlines())
+        return text
     if name.endswith(".docx"):
         import docx
         return "\n".join(p.text for p in docx.Document(io.BytesIO(data)).paragraphs)
@@ -31,6 +38,11 @@ def extract_text(filename: str, data: bytes) -> str:
             except UnicodeDecodeError:
                 continue
     raise ValueError("Поддерживаются PDF, DOCX и TXT. На hh.ru: «Скачать» → PDF.")
+
+
+def _fragmented(text: str) -> bool:
+    lines = [x.strip() for x in text.splitlines() if x.strip()]
+    return len(lines) > 30 and sum(len(x.split()) == 1 for x in lines) / len(lines) > 0.6
 
 
 def clean_lines(text: str) -> list[str]:
@@ -152,12 +164,13 @@ def _jobs(block: list[str]) -> list[dict]:
 
 SECTIONS = {
     "about": ("ОБОМНЕ", "ОСЕБЕ", "ABOUTME", "ABOUT", "SUMMARY", "PROFILE", "ПРОФИЛЬ"),
-    "experience": ("ОПЫТРАБОТЫ", "ОПЫТ", "WORKEXPERIENCE", "EXPERIENCE"),
+    "experience": ("ОПЫТРАБОТЫ", "ОПЫТ", "WORKEXPERIENCE", "EXPERIENCE", "PROFESSIONALEXPERIENCE"),
     "education": ("ОБРАЗОВАНИЕ", "EDUCATION"),
-    "skills": ("НАВЫКИ", "КЛЮЧЕВЫЕНАВЫКИ", "КОМПЕТЕНЦИИ", "SKILLS", "KEYSKILLS"),
+    "skills": ("НАВЫКИ", "КЛЮЧЕВЫЕНАВЫКИ", "КОМПЕТЕНЦИИ", "SKILLS", "KEYSKILLS", "CORECOMPETENCIES", "TECHNICALSKILLS", "ИНСТРУМЕНТЫ", "TOOLS"),
     "other": ("ЯЗЫКИ", "LANGUAGES", "КУРСЫ", "СЕРТИФИКАТЫ", "CERTIFICATES", "ДОСТИЖЕНИЯ", "ПРОЕКТЫ", "PROJECTS", "КОНТАКТЫ", "CONTACTS"),
 }
-PERIOD = rf"({MONTHS}\s+\d{{4}}|\d{{2}}\.\d{{4}}|\d{{4}})\s*[–—-]\s*(настоящее время|по настоящее время|наст\. время|present|now|{MONTHS}\s+\d{{4}}|\d{{2}}\.\d{{4}}|\d{{4}})"
+_DATE = rf"({MONTHS}\s+\d{{4}}|{MONTHS_SHORT}\s+\d{{4}}|\d{{2}}\.\d{{2,4}}|\d{{4}})"
+PERIOD = rf"{_DATE}\s*[–—-]\s*((to |по )?(настоящее время|наст\. время|present|now|сейчас)|{_DATE})"
 
 
 def _section(line: str) -> str:
@@ -210,10 +223,14 @@ def parse_generic(lines: list[str]) -> dict:
     jobs = []
     for i, x in enumerate(parts.get("experience", [])):
         m = re.search(PERIOD + r"\s*$", x)
-        if not m or x.startswith("•"):
+        if not m or x.startswith(("•", "●")):
             continue
         title = x[:m.start()].strip(" ,–—-")
         nxt = parts["experience"][i + 1] if i + 1 < len(parts["experience"]) else ""
+        nxt = re.sub(r"\s+[А-ЯЁA-Z][а-яёa-z\-]+, [А-ЯЁA-Z][а-яёa-z\-]+$", "", nxt)  # «ООО Пример Москва, Россия»
+        nxt = re.sub(r",\s*[A-ZА-ЯЁ][\w\-]+(,\s*[A-ZА-ЯЁ][\w\-]+)*$", "", nxt)  # «Example Ltd, Cyprus, Limassol»
+        if "," in title:  # «Компания, Город, 06.24-03.26», должность строкой ниже
+            title, nxt = nxt, title.split(",")[0]
         company = re.sub(r"\s+[А-ЯЁA-Z][а-яёa-z\-]+, [А-ЯЁA-Z][а-яёa-z\-]+$", "", nxt).strip()
         if not title:  # период отдельной строкой: порядок блоков в PDF не надёжен, место работы не угадываем
             continue
@@ -222,7 +239,7 @@ def parse_generic(lines: list[str]) -> dict:
         out["jobs"] = jobs
         out["title"] = jobs[0]["title"]
     elif len(head) > 1 and len(head[1]) <= 60 and not re.search(r"@|\+\d|\d{3}|telegram|http", head[1], re.I):
-        out["title"] = head[1]  # строка под ФИО: «Product Manager (FinTech, B2C)»
+        out["title"] = head[1]  # строка под ФИО: «Product Manager (B2B)»
     skills = []
     raw = parts.get("skills", [])
     if raw and not any(re.search(r"[•,;:]|\s{2,}", x) for x in raw):
@@ -244,8 +261,8 @@ def _bullets(lines: list[str]) -> list[str]:
     """Собирает пункты списка: строка с «•» начинает пункт, остальные продолжают его."""
     items: list[str] = []
     for x in lines:
-        if x.startswith("•") or not items:
-            items.append(x.lstrip("• "))
+        if x.startswith(("•", "●", "▪", "-")) or not items:
+            items.append(x.lstrip("•●▪- "))
         else:
             items[-1] = _unwrap([items[-1], x])
     return items
