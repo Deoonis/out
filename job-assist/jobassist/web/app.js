@@ -2,7 +2,7 @@
 let S = {};
 let INFO = {};
 let tab = 'dash';
-const sub = { vac: 'board', profile: 'about', prep: 'grill' };
+const sub = { vac: 'board', profile: 'about', prep: 'grill', help: 'start', msg: '' };
 let found = [];
 let showRejected = false;
 let auditText = '';
@@ -45,7 +45,7 @@ function copy(text) { navigator.clipboard.writeText(text); toast('Скопиро
 
 // ---------- состояние ----------
 function initState(s) {
-  s.profile = { name: '', title: '', sphere: '', roles: '', keywords: '', stopwords: '', salary: '', formats: [], goal: '', strategy: '', ...s.profile };
+  s.profile = { name: '', city: '', experience: '', about: '', jobs: '', title: '', sphere: '', roles: '', keywords: '', stopwords: '', salary: '', formats: [], goal: '', strategy: '', ...s.profile };
   s.settings = { ai_provider: 'gemini', ai_model: '', ai_base_url: '', ai_key: '', ai_temperature: 0.6, weekly_goal: 15, sla_days: 3, ...s.settings };
   s.resumes ??= [{ id: uid(), name: 'Основное резюме', url: '', text: '' }];
   s.vacancies ??= [];
@@ -63,6 +63,12 @@ function initState(s) {
   s.tasks ??= [];
   s.routines ??= {};
   for (const v of s.vacancies) { v.checks ??= {}; v.ai ??= {}; v.status ??= 'start'; }
+  if ((s.defaults_v || 1) < 2) {
+    // новые шаблоны и вопросы добавляются к уже сохранённым данным, свои правки пользователя не трогаем
+    for (const m of MESSAGES) { const own = s.messages.find((x) => x.title === m.title); if (own) own.cat ??= m.cat; else s.messages.push({ id: uid(), ...m }); }
+    for (const q of QUESTIONS) if (!s.questions.some((x) => x.q === q.q)) s.questions.push({ ...q, id: uid() });
+    s.defaults_v = 2;
+  }
   return s;
 }
 
@@ -82,7 +88,7 @@ function statusOf(v) {
   return v.status;
 }
 
-const TABS = [['dash', 'Дашборд'], ['vac', 'Вакансии'], ['profile', 'Профиль'], ['prep', 'Подготовка'], ['network', 'Компании и контакты'], ['tasks', 'Задачи и рутины'], ['settings', 'Настройки']];
+const TABS = [['dash', 'Дашборд'], ['vac', 'Вакансии'], ['profile', 'Профиль'], ['prep', 'Подготовка'], ['network', 'Компании и контакты'], ['tasks', 'Задачи и рутины'], ['help', 'Справка'], ['settings', 'Настройки']];
 
 function go(t) { tab = t; render(); }
 function subTabs(key, items) { return `<div class="tabs">${items.map(([id, n]) => `<button class="${sub[key] === id ? 'on' : ''}" onclick="sub.${key}='${id}';render()">${n}</button>`).join('')}</div>`; }
@@ -90,10 +96,25 @@ function subTabs(key, items) { return `<div class="tabs">${items.map(([id, n]) =
 function render() {
   $('#nav').innerHTML = TABS.map(([id, n]) => `<button class="nav ${id === tab ? 'on' : ''}" onclick="go('${id}')">${n}</button>`).join('');
   $('#view').innerHTML = VIEWS[tab]();
+  if (HELP[tab]) $('#view h2')?.insertAdjacentHTML('beforeend', `<button class="qhelp" title="Что здесь и как пользоваться" onclick="showHelp('${tab}')">?</button>`);
   if (tab === 'prep') tickSim();
 }
 
 const VIEWS = {};
+
+// ---------- Справка ----------
+const helpCard = (h) => `<div class="card"><h3>${h.title}</h3><div>${h.what}</div><ul>${h.how.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div>`;
+const bestCard = (id, b) => `<div class="card"><h3>${id}. ${b.title}</h3><b class="mute">Делать</b><ul>${b.do.map((x) => `<li>${esc(x)}</li>`).join('')}</ul><b class="mute">Избегать</b><ul>${b.avoid.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div>`;
+function showHelp(t) { modal(`${helpCard(HELP[t])}<div class="row" style="margin-top:10px"><button class="b g auto" onclick="closeModal();go('help')">Вся справка</button><button class="b auto" onclick="closeModal()">Понятно</button></div>`); }
+VIEWS.help = () => `<h2>Справка</h2>${subTabs('help', [['start', 'С чего начать'], ['sections', 'Что за что отвечает'], ['best', 'Лучшие практики по этапам'], ['data', 'Данные и ИИ']])}${HELPV[sub.help]()}`;
+const HELPV = {
+  start: () => `<div class="card"><h3>Порядок работы</h3><ol>${START_STEPS.map((x) => `<li style="margin:4px 0">${esc(x)}</li>`).join('')}</ol>
+    <div class="mute">Подробный чек-лист из 9 шагов с прогрессом есть в разделе «Задачи и рутины». Кнопка «?» рядом с заголовком любого раздела открывает подсказку по нему.</div></div>`,
+  sections: () => `<div class="grid g2">${Object.values(HELP).map(helpCard).join('')}</div>`,
+  best: () => `<div class="grid g2">${Object.entries(BEST).map(([id, b]) => bestCard(id, b)).join('')}</div>`,
+  data: () => `<div class="grid g2"><div class="card"><h3>Где хранятся данные</h3><ul><li>Всё хранится локально в базе SQLite в папке пользователя (%APPDATA%\\JobAssist в Windows).</li><li>Все версии программы работают с одной базой: обновление exe данные не теряет.</li><li>Перенос на другой компьютер: Настройки → «Бэкап JSON» и «Импорт JSON».</li><li>Наружу уходят только запросы к API hh.ru и к выбранному ИИ-провайдеру.</li></ul></div>
+    <div class="card"><h3>Что делает ИИ</h3><ul><li>Работает только по кнопкам: разбор резюме, прожарка, ядро рынка, ИИ-помощник в карточке вакансии, mock-интервью, аудит воронки.</li><li>Перед первой отправкой резюме ИИ спрашивается согласие.</li><li>Ключ задаётся переменной окружения (например GEMINI_API_KEY) или в Настройках.</li><li>Всё остальное (балл вакансий, разбор резюме правилами, аналитика) считается без ИИ.</li></ul></div></div>`,
+};
 
 // ---------- Дашборд ----------
 VIEWS.dash = () => {
@@ -109,7 +130,7 @@ VIEWS.dash = () => {
   const reasons = REJECT_REASONS.map((r) => [r, S.rejections.filter((x) => x.reason === r).length]).filter((x) => x[1]);
   const onboarding = !S.profile.title && !S.profile.roles ? `<div class="card" style="margin-bottom:14px;border-color:var(--acc)"><h3>Начните с импорта резюме</h3>
     <div class="mute">Загрузите резюме, скачанное с hh.ru (PDF, DOCX или TXT): приложение заполнит должность, навыки, ожидания и формат работы. Дальше по шагам алгоритма во вкладке «Задачи и рутины».</div>
-    <button class="b" style="margin-top:10px" onclick="tab='profile';sub.profile='about';render()">Импортировать резюме</button></div>` : '';
+    <div style="margin-top:10px">${uploadBox()}</div></div>` : '';
   return `<h2>Дашборд</h2>${onboarding}
   <div class="grid g5">${[[`${week} / ${goal}`, 'Откликов за 7 дней / цель'], [n, 'Всего откликов'], [active, 'В работе'], [remind.length, 'Нужен пинг HR'],
     [conv(3) + '%', 'Дошли до HR'], [conv(5) + '%', 'Дошли до профильного'], [conv(7) + '%', 'Офферы'], [median + ' дн.', 'Медиана жизни отклика']]
@@ -254,7 +275,8 @@ function setStage(id, stage) {
   v.stage = stage; v.status = v.status === 'reject' ? 'reject' : 'start'; v.updated = today(); save(); render();
 }
 
-const AI_TASKS = { analyze: 'Gap-анализ', cv_adapt: 'Резюме под вакансию', cover_letter: 'Сопроводительное', brief: 'Бриф к интервью', ping_hr: 'Пинг HR', recruiter_reply: 'Ответ рекрутеру' };
+const AI_TASKS = { analyze: 'Gap-анализ', cv_adapt: 'Резюме под вакансию', cover_letter: 'Сопроводительное', brief: 'Бриф к интервью', ping_hr: 'Пинг HR', recruiter_reply: 'Ответ рекрутеру',
+  salary_answer: 'Ответ про зарплату', offer_negotiation: 'Торг по офферу', feedback_request: 'Запрос фидбэка', decline: 'Вежливый отказ' };
 
 function openCard(id) {
   const v = byId('vacancies', id);
@@ -271,6 +293,7 @@ function openCard(id) {
     <div class="grid g2"><div><label>Заметки</label><textarea onchange="upd('${id}','notes',this.value)">${esc(v.notes)}</textarea></div>
       <div><label>Профайл компании</label><textarea onchange="upd('${id}','profile',this.value)">${esc(v.profile)}</textarea></div></div>
     <label>Текст вакансии ${v.source === 'hh' ? `<a href="#" onclick="loadFull('${id}');return false">(загрузить полный с hh.ru)</a>` : ''}</label><textarea id="vtext" style="min-height:90px" onchange="upd('${id}','text',this.value)">${esc(v.text)}</textarea>
+    ${BEST[v.stage] ? `<details class="tip"><summary>💡 Лучшие практики этапа «${stageName(v.stage)}»</summary><b class="mute">Делать</b><ul>${BEST[v.stage].do.map((x) => `<li>${esc(x)}</li>`).join('')}</ul><b class="mute">Избегать</b><ul>${BEST[v.stage].avoid.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></details>` : ''}
     <h3 style="margin-top:14px">Чек-лист этапа «${stageName(v.stage)}»</h3>${(ROUTINES[v.stage] || []).map((t, i) => `<label class="chk"><input type="checkbox" ${v.checks[v.stage + '.' + i] ? 'checked' : ''} onchange="byId('vacancies','${id}').checks['${v.stage}.${i}']=this.checked;save()"> ${esc(t)}</label>`).join('')}
     <h3 style="margin-top:14px">ИИ-помощник</h3><div class="row">${Object.entries(AI_TASKS).map(([k, n]) => `<button class="b g s auto" onclick="runAi('${id}','${k}')">${n}</button>`).join('')}</div>
     <div id="aiout">${Object.entries(v.ai).map(([k, t]) => aiBlock(k, t)).join('')}</div>
@@ -322,16 +345,23 @@ PROFILE.about = () => {
   const p = S.profile;
   const f = (k, n, ph = '') => `<div><label>${n}</label><input value="${esc(p[k])}" placeholder="${ph}" onchange="S.profile['${k}']=this.value;save()"></div>`;
   const t = (k, n, ph) => `<div><label>${n}</label><textarea placeholder="${ph}" onchange="S.profile['${k}']=this.value;save()">${esc(p[k])}</textarea></div>`;
-  return `<div class="card"><h3>Импорт резюме</h3><div class="mute">Скачайте резюме на hh.ru («Скачать» → PDF) или загрузите DOCX / TXT. Перед применением покажу, что найдено.</div>
-    <label class="b auto" style="display:inline-block;margin-top:10px;color:#fff">Выбрать файл<input type="file" accept=".pdf,.docx,.txt,.md" style="display:none" onchange="importResume(this.files[0])"></label></div>
+  return `<div class="card"><h3>Импорт резюме</h3><div class="mute" style="margin-bottom:10px">Приложение выделит должность, роли, зарплату, формат работы и навыки. Перед применением покажет, что найдено.</div>${uploadBox()}</div>
   <div class="card" style="margin-top:14px"><div class="row">${f('name', 'Имя')}${f('title', 'Желаемая должность')}${f('sphere', 'Сфера / отрасль')}${f('salary', 'Ожидания по зарплате', 'число')}</div>
-    <div class="row">${f('goal', 'Цель поиска')}</div>
+    <div class="row">${f('city', 'Город')}${f('experience', 'Общий опыт')}${f('goal', 'Цель поиска')}</div>
     <label>Формат работы</label><div class="row">${['удалёнка', 'гибрид', 'офис'].map((x) => `<label class="chk auto"><input type="checkbox" ${p.formats.includes(x) ? 'checked' : ''} onchange="toggleFormat('${x}',this.checked)"> ${x}</label>`).join('')}</div>
-    ${t('strategy', 'Стратегия поиска', 'Какие компании, каналы и темп откликов')}</div>
+    ${t('strategy', 'Стратегия поиска', 'Какие компании, каналы и темп откликов')}
+    <div class="grid g2">${t('jobs', 'Места работы', 'Период: должность, компания')}${t('about', 'О себе', 'Кратко о себе')}</div></div>
   <div class="card" style="margin-top:14px"><h3>Скоринг вакансий</h3><div class="mute">Балл 0–100 считается по этим словам: роль в названии вакансии, навыки в тексте, зарплата, формат, стоп-слова. Можно писать часть слова.</div>
     <div class="grid g2">${t('roles', 'Целевые роли (через запятую)', 'например: менеджер проектов, project manager')}${t('keywords', 'Ключевые навыки и домен (через запятую)', 'например: agile, бюджет, b2b')}${t('stopwords', 'Стоп-слова (через запятую)', 'например: стажёр, холодные звонки')}</div></div>`;
 };
 let imported = null;
+
+function uploadBox(hint) {
+  return `<div class="drop" ondragover="event.preventDefault();this.classList.add('over')" ondragleave="this.classList.remove('over')"
+    ondrop="event.preventDefault();this.classList.remove('over');importResume(event.dataTransfer.files[0])">
+    <label class="b big">📄 Загрузить резюме<input type="file" accept=".pdf,.docx,.txt,.md" hidden onchange="importResume(this.files[0]);this.value=''"></label>
+    <div class="mute">${hint || 'PDF, скачанный с hh.ru («Скачать» → PDF), DOCX или TXT. Можно перетащить файл сюда.'}</div></div>`;
+}
 
 async function importResume(file) {
   if (!file) return;
@@ -339,10 +369,10 @@ async function importResume(file) {
   try {
     const r = await api('resume/parse', { filename: file.name, data: await fileToBase64(file) });
     const f = r.fields;
-    imported = { text: r.text, filename: file.name, ai: false,
+    imported = { text: r.text, filename: file.name, ai: false, name: f.name || '', city: f.city || '', experience: f.experience_total || '',
       title: f.title || '', roles: [...new Set([f.title, ...(f.specializations || [])].filter(Boolean).map(s => s.trim()))].join(', '), sphere: '',
       salary: f.salary || '', formats: f.formats || [], keywords: (f.skills || []).join(', '),
-      skills: (f.skills || []).map((name) => ({ block: 'Навыки из резюме', name })), about: f.about || '', jobs: f.jobs || [], is_hh: f.is_hh };
+      skills: (f.skills || []).map((name) => ({ block: 'Навыки из резюме', name })), about: f.about || '', jobs: f.jobs || [], jobsText: (f.jobs || []).map((j) => `${j.period}: ${j.title}, ${j.company}`).join('\n'), is_hh: f.is_hh };
     reviewImport();
   } catch (e) { toast('Ошибка импорта: ' + e.message); }
 }
@@ -363,31 +393,36 @@ function reviewImport() {
   const m = imported;
   const row = (k, n, v) => `<label class="chk" style="align-items:flex-start"><input type="checkbox" data-k="${k}" ${v ? 'checked' : 'disabled'}><span><b>${n}:</b> ${esc(v) || '<span class="mute">не найдено</span>'}</span></label>`;
   const blocks = [...new Set(m.skills.map((x) => x.block))];
+  const weak = !m.ai && (!m.title || !m.skills.length);
   modal(`<h3>Что найдено в «${esc(m.filename)}»</h3>
-    <div class="mute">${m.is_hh ? 'Распознан формат hh.ru.' : 'Формат hh.ru не распознан: правилами найдено мало, попробуйте разбор через ИИ.'} ${m.ai ? 'Поля уточнены ИИ.' : ''} Отметьте, что применить. Пустые поля профиля заполнятся, заполненные будут заменены.</div>
-    <div style="margin-top:10px">${row('title', 'Желаемая должность', m.title)}${row('roles', 'Целевые роли (для скоринга)', m.roles)}${row('sphere', 'Сфера', m.sphere)}
+    ${weak ? `<div class="warn">Правилами найдено мало: ${m.is_hh ? 'вёрстка PDF отличается от ожидаемой' : 'формат hh.ru не распознан'}. Нажмите «Разобрать через ИИ»: ИИ заполнит должность, роли, навыки и зарплату (нужен ключ ИИ в Настройках).</div>` : ''}
+    <div class="mute">${weak ? '' : m.is_hh ? 'Распознан формат hh.ru.' : 'Резюме разобрано по разделам.'} ${m.ai ? 'Поля уточнены ИИ.' : ''} Отметьте, что применить. Пустые поля профиля заполнятся, заполненные будут заменены.</div>
+    <div style="margin-top:10px">${row('name', 'Имя', m.name)}${row('city', 'Город', m.city)}${row('experience', 'Общий опыт', m.experience)}${row('title', 'Желаемая должность', m.title)}${row('roles', 'Целевые роли (для скоринга)', m.roles)}${row('sphere', 'Сфера', m.sphere)}
     ${row('salary', 'Ожидания по зарплате', m.salary && money(m.salary))}${row('formats', 'Формат работы', m.formats.join(', '))}${row('keywords', 'Ключевые слова (для скоринга)', m.keywords)}
     ${row('skills', `Навыки в матрицу (${m.skills.length}, оценка 0)`, blocks.map((b) => `${b}: ${m.skills.filter((x) => x.block === b).map((x) => x.name).join(', ')}`).join(' · '))}
-    ${row('resume', 'Текст резюме → новая версия резюме', m.text && `${m.text.length} символов`)}</div>
-    ${m.jobs.length ? `<div class="mute" style="margin-top:8px">Опыт: ${m.jobs.map((j) => esc(`${j.title} — ${j.company} (${j.period})`)).join('; ')}</div>` : ''}
-    <div class="row" style="margin-top:12px"><button class="b auto" onclick="applyImport()">Применить</button><button class="b g auto" id="imp_ai" onclick="aiImport()">${m.ai ? 'Разобрать через ИИ ещё раз' : 'Уточнить через ИИ'}</button></div>`);
+    ${row('jobs', `Места работы (${m.jobs.length})`, m.jobs.map((j) => `${j.title} — ${j.company}`).join('; '))}${row('about', 'О себе', m.about && m.about.slice(0, 160) + (m.about.length > 160 ? '…' : ''))}
+    ${row('resume', S.resumes.some((r) => r.name === m.filename) ? 'Текст резюме → обновить версию с этим именем' : 'Текст резюме → новая версия резюме', m.text && `${m.text.length} символов`)}</div>
+    <div class="row" style="margin-top:12px">${weak ? `<button class="b auto" id="imp_ai" onclick="aiImport()">Разобрать через ИИ</button><button class="b g auto" onclick="applyImport()">Применить найденное</button>`
+      : `<button class="b auto" onclick="applyImport()">Применить</button><button class="b g auto" id="imp_ai" onclick="aiImport()">${m.ai ? 'Разобрать через ИИ ещё раз' : 'Уточнить через ИИ'}</button>`}</div>`);
 }
 
 function applyImport() {
   const m = imported, on = (k) => document.querySelector(`.modal [data-k="${k}"]`)?.checked;
-  for (const k of ['title', 'roles', 'sphere', 'salary', 'keywords']) if (on(k)) S.profile[k] = String(m[k]);
+  for (const k of ['name', 'city', 'experience', 'title', 'roles', 'sphere', 'salary', 'keywords', 'about']) if (on(k)) S.profile[k] = String(m[k]);
+  if (on('jobs')) S.profile.jobs = m.jobsText;
   if (on('formats')) S.profile.formats = m.formats;
   if (on('skills')) for (const x of m.skills) if (!S.skills.some((s) => s.name.toLowerCase() === x.name.toLowerCase())) S.skills.push({ id: uid(), block: x.block, name: x.name, level: 0, proof: '' });
   if (on('resume')) {
-    const empty = S.resumes.find((r) => !r.text);
-    if (empty) Object.assign(empty, { name: m.filename, text: m.text }); else S.resumes.push({ id: uid(), name: m.filename, url: '', text: m.text });
+    // тот же файл повторно обновляет свою карточку, а не плодит версии
+    const same = S.resumes.find((r) => r.name === m.filename) || S.resumes.find((r) => !r.text);
+    if (same) Object.assign(same, { name: m.filename, text: m.text }); else S.resumes.push({ id: uid(), name: m.filename, url: '', text: m.text });
   }
   imported = null; closeModal(); save(); render(); toast('Профиль обновлён из резюме');
 }
 
 function toggleFormat(x, on) { const f = S.profile.formats; S.profile.formats = on ? [...new Set([...f, x])] : f.filter((y) => y !== x); save(); }
 
-PROFILE.resumes = () => `<div class="grid g2">${S.resumes.map((r) => `<div class="card">
+PROFILE.resumes = () => `<div class="card" style="margin-bottom:14px"><h3>Загрузить резюме из файла</h3>${uploadBox('Файл станет новой версией резюме, данные профиля можно обновить в окне проверки.')}</div><div class="grid g2">${S.resumes.map((r) => `<div class="card">
     <div class="row"><input value="${esc(r.name)}" onchange="byId('resumes','${r.id}').name=this.value;save()"><button class="b g s auto" onclick="if(S.resumes.length>1&&confirm('Удалить версию?'))delItem('resumes','${r.id}')">✕</button></div>
     <label>Ссылка</label><input value="${esc(r.url)}" onchange="byId('resumes','${r.id}').url=this.value;save()">
     <label>Текст резюме (используется ИИ)</label><textarea style="min-height:200px" onchange="byId('resumes','${r.id}').text=this.value;save()">${esc(r.text)}</textarea>
@@ -501,9 +536,16 @@ PREP.self = () => `<div class="grid g2">${S.selfPresentation.map((x, i) => `<div
   <div class="card" style="margin-top:10px"><b>Целиком</b> <a href="#" onclick="copy(S.selfPresentation.map(x=>x.text).filter(Boolean).join('\\n\\n'));return false">копировать</a>
     <div class="ai-out">${esc(S.selfPresentation.map((x) => x.text).filter(Boolean).join('\n\n') || 'Заполните блоки выше.')}</div></div>`;
 
-PREP.messages = () => `<div class="grid g2">${S.messages.map((m) => `<div class="card"><div class="row"><input value="${esc(m.title)}" onchange="byId('messages','${m.id}').title=this.value;save()"><button class="b g s auto" onclick="copy(byId('messages','${m.id}').text)">Копировать</button><button class="b g s auto" onclick="delItem('messages','${m.id}')">✕</button></div>
+PREP.messages = () => {
+  const order = [...new Set(MESSAGES.map((m) => m.cat))];
+  const cats = [...new Set([...order, ...S.messages.map((m) => m.cat || 'Свои')])].filter((c) => S.messages.some((m) => (m.cat || 'Свои') === c));
+  const list = S.messages.filter((m) => !sub.msg || (m.cat || 'Свои') === sub.msg);
+  return `<div class="tabs"><button class="${!sub.msg ? 'on' : ''}" onclick="sub.msg='';render()">Все (${S.messages.length})</button>${cats.map((c) => `<button class="${sub.msg === c ? 'on' : ''}" onclick="sub.msg='${esc(c)}';render()">${esc(c)}</button>`).join('')}</div>
+  <div class="mute" style="margin-bottom:10px">Подставьте значения в [скобках]. Шаблоны можно править: изменения сохраняются. Персональную версию под конкретную вакансию сделает ИИ-помощник в карточке.</div>
+  <div class="grid g2">${list.map((m) => `<div class="card"><div class="row"><input value="${esc(m.title)}" onchange="byId('messages','${m.id}').title=this.value;save()"><span class="pill auto">${esc(m.cat || 'Свои')}</span><button class="b g s auto" onclick="copy(byId('messages','${m.id}').text)">Копировать</button><button class="b g s auto" onclick="delItem('messages','${m.id}')">✕</button></div>
     <textarea style="min-height:130px;margin-top:6px" onchange="byId('messages','${m.id}').text=this.value;save()">${esc(m.text)}</textarea></div>`).join('')}</div>
-  <button class="b g" style="margin-top:8px" onclick="S.messages.push({id:uid(),title:'Новый шаблон',text:''});save();render()">+ Шаблон</button>`;
+  <button class="b g" style="margin-top:10px" onclick="S.messages.push({id:uid(),cat:sub.msg||'Свои',title:'Новый шаблон',text:''});save();render()">+ Шаблон</button>`;
+};
 
 PREP.mine = () => `<div class="card"><table><tr><th>Кому</th><th>Вопрос</th><th>Что ожидаю услышать / red flags</th><th></th></tr>
   ${S.empQuestions.map((e) => `<tr><td><span class="pill">${esc(e.group)}</span></td><td><input value="${esc(e.text)}" onchange="byId('empQuestions','${e.id}').text=this.value;save()"></td><td><input value="${esc(e.expect)}" onchange="byId('empQuestions','${e.id}').expect=this.value;save()"></td><td><button class="b g s" onclick="delItem('empQuestions','${e.id}')">✕</button></td></tr>`).join('')}</table>
@@ -547,11 +589,19 @@ VIEWS.settings = () => {
   <div class="card"><h3>Цели</h3>${inp('weekly_goal', 'Откликов за 7 дней', 'number')}${inp('sla_days', 'Дней без движения до «Нужен пинг»', 'number')}
     <h3 style="margin-top:16px">Данные</h3><div class="mute">База: ${esc(INFO.data_file || '')}</div>
     <div class="row" style="margin-top:10px"><a class="b auto" href="/api/export/xlsx" download onclick="flushSave()">Экспорт в Excel</a><a class="b g auto" href="/api/export/json" download onclick="flushSave()">Бэкап JSON</a>
-      <label class="b g auto" style="margin:0;color:var(--ink)">Импорт JSON<input type="file" accept=".json" style="display:none" onchange="importData(this.files[0])"></label></div>
-    <div class="mute" style="margin-top:6px">API-ключ в бэкап не попадает.</div></div></div>`;
+      <label class="b g auto">Импорт JSON<input type="file" accept=".json" hidden onchange="importData(this.files[0])"></label></div>
+    <div class="mute" style="margin-top:6px">API-ключ в бэкап не попадает.</div>
+    <h3 style="margin-top:16px">Очистка</h3><div class="mute">Удаляет профиль, резюме, вакансии, навыки, контакты и заметки. Настройки ИИ сохраняются. Перед очисткой сделайте «Бэкап JSON», если данные нужны.</div>
+    <button class="b r" style="margin-top:8px" onclick="clearAll()">Очистить все данные</button></div></div>`;
 };
 
 function flushSave() { clearTimeout(saveT); fetch('/api/state', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(S), keepalive: true }); }
+
+function clearAll() {
+  if (!confirm('Удалить все данные приложения? Отменить это нельзя.')) return;
+  const settings = S.settings;
+  S = initState({ settings }); save(); tab = 'dash'; render(); toast('Данные очищены');
+}
 
 async function importData(file) {
   try {

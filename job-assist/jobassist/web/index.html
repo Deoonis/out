@@ -7,11 +7,11 @@
 <style>
 :root{--bg:#f4f6fb;--card:#fff;--ink:#0f172a;--mute:#64748b;--line:#e2e8f0;--acc:#4f46e5;--acc2:#7c3aed;--ok:#059669;--warn:#d97706;--bad:#e11d48;--r:14px}
 *{box-sizing:border-box}body{margin:0;font:14px/1.45 "Segoe UI",system-ui,sans-serif;background:var(--bg);color:var(--ink);display:flex;height:100vh;overflow:hidden}
-aside{width:230px;background:#0f172a;color:#cbd5e1;display:flex;flex-direction:column;padding:16px 10px;flex-shrink:0}
-aside h1{font-size:17px;color:#fff;margin:4px 10px 18px}aside h1 span{color:#a5b4fc}
+aside{width:230px;background:#fff;color:#334155;border-right:1px solid var(--line);display:flex;flex-direction:column;padding:16px 10px;flex-shrink:0}
+aside h1{font-size:17px;color:var(--ink);margin:4px 10px 18px}aside h1 span{color:var(--acc)}
 aside button.nav{all:unset;display:block;padding:9px 12px;border-radius:10px;cursor:pointer;margin:1px 0}
-aside button.nav:hover{background:#1e293b}aside button.nav.on{background:linear-gradient(90deg,var(--acc),var(--acc2));color:#fff}
-aside .foot{margin-top:auto;font-size:12px;color:#64748b;padding:8px 10px}
+aside button.nav:hover{background:#f1f5f9}aside button.nav.on{background:#eef2ff;color:var(--acc);font-weight:600}
+aside .foot{margin-top:auto;font-size:12px;color:var(--mute);padding:8px 10px}
 main{flex:1;overflow:auto;padding:22px 28px}
 h2{margin:0 0 16px;font-size:22px}h3{margin:0 0 10px;font-size:15px}
 .grid{display:grid;gap:14px}.g2{grid-template-columns:repeat(auto-fit,minmax(340px,1fr))}.g5{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
@@ -20,8 +20,8 @@ h2{margin:0 0 16px;font-size:22px}h3{margin:0 0 10px;font-size:15px}
 input,select,textarea{font:inherit;border:1px solid var(--line);border-radius:10px;padding:7px 10px;background:#fff;color:var(--ink);width:100%}
 textarea{min-height:80px;resize:vertical}label{display:block;font-size:12px;color:var(--mute);margin:8px 0 3px}
 .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.row>*{flex:1}.row>.auto{flex:0 0 auto}
-button.b{border:0;border-radius:10px;padding:8px 14px;cursor:pointer;background:var(--acc);color:#fff;font:inherit;white-space:nowrap}
-button.b:hover{filter:brightness(1.1)}button.b.g{background:#e2e8f0;color:var(--ink)}button.b.r{background:var(--bad)}button.b.s{padding:4px 9px;font-size:12px}
+button.b,label.b,a.b{text-decoration:none;display:inline-block;margin:0;font-size:14px;border:0;border-radius:10px;padding:8px 14px;cursor:pointer;background:var(--acc);color:#fff;font:inherit;white-space:nowrap}
+button.b:hover,label.b:hover,a.b:hover{filter:brightness(1.08)}button.b.g,label.b.g,a.b.g{background:#e2e8f0;color:var(--ink)}button.b.r,a.b.r{background:var(--bad)}button.b.s{padding:4px 9px;font-size:12px}
 .pill{display:inline-block;padding:2px 8px;border-radius:99px;font-size:12px;background:#eef2ff;color:var(--acc)}
 .score{display:inline-block;min-width:38px;text-align:center;font-weight:700;border-radius:8px;padding:3px 6px;color:#fff}
 .vac{display:flex;gap:12px;align-items:flex-start;padding:12px 0;border-bottom:1px solid var(--line)}.vac:last-child{border:0}
@@ -31,13 +31,13 @@ button.b:hover{filter:brightness(1.1)}button.b.g{background:#e2e8f0;color:var(--
 .col h4{margin:2px 4px 10px;font-size:13px;display:flex;justify-content:space-between}
 .kc{background:#fff;border-radius:10px;padding:10px;margin-bottom:8px;cursor:grab;border:1px solid var(--line)}
 .kc:hover{box-shadow:0 4px 12px #0f172a1a}
-.modal{position:fixed;inset:0;background:#0f172a80;display:flex;align-items:center;justify-content:center;z-index:9}
+.modal{position:fixed;inset:0;background:#0f172a40;display:flex;align-items:center;justify-content:center;z-index:9}
 .modal .card{width:min(900px,94vw);max-height:90vh;overflow:auto}
 .ai-out{white-space:pre-wrap;background:#f8fafc;border:1px solid var(--line);border-radius:10px;padding:12px;margin-top:10px;max-height:420px;overflow:auto}
 .empty{text-align:center;color:var(--mute);padding:30px}
 .chk{display:flex;gap:8px;align-items:center;padding:4px 0}.chk input{width:auto}
 .bar{height:10px;background:#e2e8f0;border-radius:99px;overflow:hidden}.bar i{display:block;height:100%;background:linear-gradient(90deg,var(--acc),var(--acc2))}
-.toast{position:fixed;right:20px;bottom:20px;background:#0f172a;color:#fff;padding:10px 16px;border-radius:10px;z-index:10}
+.toast{position:fixed;right:20px;bottom:20px;background:#fff;color:var(--ink);border:1px solid var(--line);border-left:4px solid var(--acc);box-shadow:0 8px 24px #0f172a1f;padding:10px 16px;border-radius:10px;z-index:10}
 table{width:100%;border-collapse:collapse}td,th{padding:6px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
 .stack{display:flex;height:12px;background:#e2e8f0;border-radius:99px;overflow:hidden;margin:3px 0 8px}.stack i{display:block;height:100%}
 .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px}
@@ -45,6 +45,10 @@ table{width:100%;border-collapse:collapse}td,th{padding:6px;border-bottom:1px so
 .tabs{display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap}.tabs button{border:1px solid var(--line);background:#fff;border-radius:99px;padding:6px 14px;cursor:pointer;font:inherit}.tabs button.on{background:var(--acc);color:#fff;border-color:var(--acc)}
 details summary{cursor:pointer;list-style:none}
 .warn{background:#fef3c7;color:#92400e;border-radius:10px;padding:8px 12px;font-size:12px;margin-top:8px}
+.b.big{padding:12px 22px;font-size:15px;font-weight:600}
+.drop{border:2px dashed #c7d2fe;background:#f8faff;border-radius:var(--r);padding:18px;display:flex;gap:16px;align-items:center;flex-wrap:wrap}.drop.over{border-color:var(--acc);background:#eef2ff}.drop .mute{flex:1;min-width:220px}
+.qhelp{margin-left:10px;width:26px;height:26px;border-radius:50%;border:1px solid var(--line);background:#fff;color:var(--acc);font-weight:700;cursor:pointer;vertical-align:middle}.qhelp:hover{background:#eef2ff}
+.tip{background:#f8faff;border:1px solid #e0e7ff;border-radius:10px;padding:8px 12px;margin-top:12px}.tip summary{font-weight:600;color:var(--acc)}ul{margin:6px 0 10px;padding-left:20px}li{margin:2px 0}
 .timer{font-size:42px;font-weight:700;font-variant-numeric:tabular-nums}
 </style>
 </head>
@@ -56,6 +60,7 @@ details summary{cursor:pointer;list-style:none}
 </aside>
 <main id="view"></main>
 <script src="defaults.js"></script>
+<script src="guide.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
